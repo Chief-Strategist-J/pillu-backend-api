@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Auth\Events\Registered;
+use App\Mail\TestEmail;
 use App\Models\FireAuthUser;
 use App\Models\OneSignalUserProfile;
 use App\Models\User;
@@ -12,14 +14,13 @@ use App\Models\UserFriendList;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\RequestListResource;
 use App\Http\Resources\InvitationListResource;
-use App\Mail\TestEmail;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Throwable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
+use App\Helper\Helper;
+use Throwable;
 
 class FireAuthUserController extends Controller
 {
@@ -30,174 +31,153 @@ class FireAuthUserController extends Controller
     public function sendEmail()
     {
         try {
-           
-
-            // Use mail function to send the email
-            
-            Mail::to('dev.jaydeep919@gmail.com')->send(new TestEmail());
-            
-            Mail::raw("5% off its awesome\n\nGo get it now!", function ($message) {
-                $message->from('dev.jaydeep919@gmail.com', 'Company name');
-                $message->to('chief.strategist.j@gmail.com');
-                $message->subject('5% off all our website');
-                $message->html('<p>5% off its awesome</p><p>Go get it now!</p>');
-                $message->text("5% off its awesome\n\nGo get it now!");
-            });
-
-            
+            //
         } catch (Throwable $e) {
-            $this->logMessage($e);
-            return response()->json(
-                [
-                    'status' => true,
-                    'error' => 'N/A',
-                    'message' => 'Sending Email Is Fail',
-                    'data' => $e->getMessage(),
-                ],
-                200
-            );
+            //
         }
     }
 
-    public function updateOnesignalSubcriptionId(Request $request)
+    public function updateOnesignalSubcriptionId(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
 
-            $userIsAlreadyExist = User::where('email', "=", $request->input('email'))->first();
+            $user = User::where('email', "=", $request->input('email'))->first();
+            $onesignal_subscription_id = $request->input('onesignal_subscription_id');
 
-            if ($userIsAlreadyExist && $userIsAlreadyExist->exists()) {
-                $userIsAlreadyExist->oneSignalProfile()->update(['onesignal_subscription_id' => $request->input('onesignal_subscription_id')]);
 
-                return response()->json(
-                    [
-                        'status' => true,
-                        'error' => 'N/A',
-                        'message' => 'OneSignal Subscription id is successfully updated',
-                        'data' => [
-                            'email' => $userIsAlreadyExist->value('email'),
-                            'onesignal_subscription_id' => $userIsAlreadyExist->oneSignalProfile()->value('onesignal_subscription_id')
-                        ],
-                    ],
-                    200
+            if (!is_null($user) && $user->exists()) {
+                $update_onesignal_subsciption_id = [
+                    'onesignal_subscription_id' => $onesignal_subscription_id,
+                ];
+
+                $user->oneSignalProfile()->update($update_onesignal_subsciption_id);
+
+                $data = [
+                    'email' => $user->email,
+                    'onesignal_subscription_id' => $onesignal_subscription_id
+                ];
+
+                return Helper::successMessage(
+                    message: 'OneSignal Subscription id is successfully updated',
+                    data: $data
                 );
             } else {
-                return response()->json(
-                    [
-                        'status' => false,
-                        'error' => 'N/A',
-                        'message' => 'Something went wrong or No-Email Is Exist',
-                        'data' => [],
-                    ],
-                    404
+                return Helper::errorMessage(
+                    message: 'OneSignal Subscription Id Is Not updated',
+                    error: "No User Found"
                 );
             }
         } catch (Throwable $e) {
-            return response()->json(
-                [
-                    'status' => false,
-                    'error' => $e,
-                    'error_message' => $e->getMessage(),
-                    'message' => 'Something went wrong',
-                    'data' => [],
-                ],
-                500
+            return Helper::errorMessage(
+                message: $e->getMessage(),
+                error: $e
             );
         }
     }
 
-    public function registerUser(Request $request)
+    public function registerUser(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
 
-            $userIsAlreadyExist = User::where('email', "=", $request->input('email'));
 
-            if ($userIsAlreadyExist->exists()) {
+            $email = $request->input('email');
+            $user_is_already_exists = User::where('email', $email);
+
+            if ($user_is_already_exists->exists()) {
                 $userInfo = DB::table('fire_auth_users')->where('email', '=', $request->input('email'))->first();
                 $record = User::with('fireAuthUser')->find($userInfo->id);
 
-                if ($record) {
+                if (!is_null($record) && $record->exists()) {
 
-                    return response()->json(
-                        [
-                            'status' => true,
-                            'error' => 'N/A',
-                            'message' => 'successful',
-                            'data' =>  new UserResource($record),
-                        ],
-                        200
+                    return Helper::successMessage(
+                        message: 'Successful',
+                        data: new UserResource($record)
+                    );
+                } else {
+                    return Helper::errorMessage(
+                        message: "No User Found",
+                        error: 'Something went wrong'
                     );
                 }
             } else {
-                $request->validate([
+                $validate_req = [
                     'name' => 'required|string',
-                    'email' => 'required|email|unique:users,email',
-                    'password' => 'required|string',
-                ]);
-
-                $user = User::create([
-                    'name' => $request->input('name'),
-                    'email' => $request->input('email'),
-                    'password' => $request->input('password'),
-                ]);
-
-                $request->validate([
-                    'photoUrl' => 'required|string',
-                    'email' => 'required|email|unique:fire_auth_users,email',
                     'userName' => 'required|string',
-                    'firebase_user_id' => 'required|string',
-                    'password' => 'required|string',
                     'firstname' => 'nullable|string',
                     'lastname' => 'nullable|string',
-                ]);
+                    'email' => 'required|email|unique:users,email',
+                    'firebase_user_id' => 'required|string',
+                    'password' => 'required|string',
+                    'photoUrl' => 'required|string',
+                ];
 
-                // Create a new FireAuthUser instance and save it to the database
-                $fireAuthUser = FireAuthUser::create([
+                $request->validate($validate_req);
+
+                $name = $request->input('name');
+                $email = $request->input('email');
+                $password = $request->input('password');
+                $photo_url = $request->input('photoUrl');
+                $user_name = $request->input('userName');
+                $firebase_user_id = $request->input('firebase_user_id');
+                $firstname = $request->input('firstname');
+                $lastname = $request->input('lastname');
+                $onesignal_subscription_id = $request->input('onesignal_subscription_id');
+                $onesignal_user_token = $request->input('onesignal_user_token');
+                $onesignal_external_id = $request->input('onesignal_external_id');
+
+
+                $user_req = [
+                    'name' => $name,
+                    'email' => $email,
+                    'password' => $password,
+                ];
+
+                $user = User::create($user_req);
+                $user_id = $user->id;
+
+                $create_auth_req = [
+                    'user_id' => $user_id,
+                    'photoUrl' => $photo_url,
+                    'email' => $email,
+                    'userName' => $user_name,
+                    'firebase_user_id' => $firebase_user_id,
+                    'password' => $password,
+                    'firstname' => $firstname,
+                    'lastname' => $lastname,
+                ];
+
+                $one_signal_profile_req = [
                     'user_id' => $user->id,
-                    'photoUrl' => $request->input('photoUrl'),
-                    'email' => $request->input('email'),
-                    'userName' => $request->input('userName'),
-                    'firebase_user_id' => $request->input('firebase_user_id'),
-                    'password' => $request->input('password'),
-                    'firstname' => $request->input('firstname'),
-                    'lastname' => $request->input('lastname'),
-                ]);
+                    'onesignal_subscription_id' => $onesignal_subscription_id,
+                    'onesignal_email' =>  $email,
+                    'onesignal_user_token' => $onesignal_user_token,
+                    'onesignal_external_id' => $onesignal_external_id,
+                ];
 
-                // Create a new FireAuthUser instance and save it to the database
-                $oneSignalUserProfile = OneSignalUserProfile::create([
-                    'user_id' => $user->id,
-                    'onesignal_subscription_id' => $request->input('onesignal_subscription_id'),
-                    'onesignal_email' => $request->input('email'),
-                    'onesignal_user_token' => $request->input('onesignal_user_token'),
-                    'onesignal_external_id' => $request->input('onesignal_external_id'),
-                ]);
+                $firebase_authenticated_user = FireAuthUser::create($create_auth_req);
+                $one_signal_user = OneSignalUserProfile::create($one_signal_profile_req);
 
-                $user->fireAuthUser()->save($fireAuthUser);
-                $user->oneSignalProfile()->save($oneSignalUserProfile);
+                $user->fireAuthUser()->save($firebase_authenticated_user);
+                $user->oneSignalProfile()->save($one_signal_user);
 
                 event(new Registered($user));
 
                 Auth::login($user);
                 $userWithFireAuthUser = User::with('fireAuthUser')->find($user->id);
 
-                return response()->json([
-                    'status' => true,
-                    'error' => 'N/A',
-                    'message' => 'Account created successfully!',
-                    'data' => new UserResource($userWithFireAuthUser),
-                ]);
+                return Helper::successMessage(
+                    message: 'Account created successfully!',
+                    data: new UserResource($userWithFireAuthUser),
+                );
             }
         } catch (Throwable $e) {
             report($e);
-
             $this->logMessage($e);
 
-            return response()->json([
-                'status' => false,
-                'data' => [],
-                'error_message' => $e->getMessage(),
-                'message' => 'Error While Registering User!',
-                'error' => $e->getMessage(),
-            ]);
+            return Helper::errorMessage(
+                message: $e->getMessage(),
+                error: $e
+            );
         }
     }
 
@@ -206,83 +186,39 @@ class FireAuthUserController extends Controller
 
         $errorMessage = $e->getMessage();
         $errorCode = $e->getCode();
-
-        Log::channel('slack')->info("Something happened! \n\n\n ERROR MESSAGE: $errorMessage\n\n\n CODE: $errorCode\n\n");
+        $slack_error_message = "Something happened! \n\n\n ERROR MESSAGE: $errorMessage\n\n\n CODE: $errorCode\n\n";
+        Log::channel('slack')->info($slack_error_message);
     }
 
-    public function deleteUser(Request $request)
+    public function deleteUser(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
             $record = User::find($request->input('id'));
 
-            if ($record) {
+            if (Helper::isObjectExist($record)) {
                 $record->delete();
-
-                return response()->json(
-                    [
-                        'status' => true,
-                        'error' => 'N/A',
-                        'message' => 'Record deleted successfully',
-                        'data' =>  [],
-                    ],
-                    200
-                );
+                return Helper::successMessage(message: 'Account Deleted Successfully!', data: 'N/A');
             } else {
-                return response()->json(
-                    [
-                        'status' => true,
-                        'data' => [],
-                        'error' => 'N/A',
-                        'message' => 'Record not found',
-                    ],
-                    404
-                );
+                return Helper::successMessage(message: 'Record not found', data: 'N/A');
             }
         } catch (Throwable $e) {
             report($e);
-
             $this->logMessage($e);
 
-            return response()->json(
-                [
-                    'status' => false,
-                    'data' => [],
-                    'message' => 'Error While Deleting User!',
-                    'error' => $e->getMessage(),
-                ],
-                500
-            );
+            return Helper::errorMessage(message: $e->getMessage(), error: $e);
         }
     }
 
 
-    public function getAllUser()
+    public function getAllUser(): \Illuminate\Http\JsonResponse
     {
         try {
-
-            return response()->json(
-                [
-                    'status' => true,
-                    'error' => 'N/A',
-                    'message' => 'successful',
-                    'data' => User::all(),
-                ],
-                200
-            );
+            return Helper::successMessage(message: 'Successful', data: User::all());
         } catch (Throwable $e) {
             report($e);
-
             $this->logMessage($e);
 
-            return response()->json(
-                [
-                    'status' => false,
-                    'data' => [],
-                    'message' => 'Error While Getting User!',
-                    'error' => $e->getMessage(),
-                ],
-                500
-            );
+            return Helper::errorMessage(message: $e->getMessage(), error: $e);
         }
     }
 
@@ -290,46 +226,18 @@ class FireAuthUserController extends Controller
     {
         try {
 
-            $userInfo = DB::table('fire_auth_users')->where('firebase_user_id', '=', $request->input('firebase_user_id'))->first();
-            $record = User::with('fireAuthUser')->find($userInfo->id);
+            $user_info = DB::table('fire_auth_users')->where('firebase_user_id', '=', $request->input('firebase_user_id'))->first();
+            $record = User::with('fireAuthUser')->find($user_info->id);
 
-            if ($record) {
-
-                return response()->json(
-                    [
-                        'status' => true,
-                        'error' => 'N/A',
-                        'message' => 'successful',
-                        'data' =>  new UserResource($record),
-
-                    ],
-                    200
-                );
+            if (Helper::isObjectExist($record)) {
+                return Helper::successMessage(message: 'Successful', data: new UserResource($record));
             } else {
-                return response()->json(
-                    [
-                        'status' => true,
-                        'error' => 'N/A',
-                        'message' => 'Record not found',
-                        'data' =>  [],
-                    ],
-                    404
-                );
+                return Helper::successMessage(message: 'Record not found', data: 'N/A');
             }
         } catch (Throwable $e) {
             report($e);
-
             $this->logMessage($e);
-
-            return response()->json(
-                [
-                    'status' => false,
-                    'data' => [],
-                    'message' => 'Error While Getting User!',
-                    'error' => $e->getMessage(),
-                ],
-                500
-            );
+            return Helper::errorMessage(message: $e->getMessage(), error: $e);
         }
     }
 
@@ -337,120 +245,62 @@ class FireAuthUserController extends Controller
     public function friendRequest(Request $request)
     {
         try {
-            // Current User 
             $inviter = $request->input('inviter_email');
-            $inviterRecord = User::where('email', $inviter)->first();
-
-            /// What If Inviter Is Not Exist In Pillu's Record 
-            if (is_null($inviterRecord) || !$inviterRecord->exists()) {
-                return response()->json(
-                    [
-                        'status' => false,
-                        'data' => [],
-                        'message' => "Friend request failed.\nTry again later.",
-                        'error' => "Please register first to request",
-                    ],
-                    403
-                );
-            }
-
-            // Other User
+            $inviter_record = User::where('email', $inviter)->first();
             $invitee = $request->input('invitee_email');
-            $inviteeRecord = User::where('email', $invitee)->first();
+            $invitee_record = User::where('email', $invitee)->first();
 
-            if ($inviterRecord->friendLists()->where('email', '=', $invitee)->exists()) {
-                // Add in friend list of invitee if not exist
-                return response()->json(
-                    [
-                        'error' => [],
-                        'status' => false,
-                        'message' => "Friend request failed.\n Your Already Friend",
-                        'data' => $inviterRecord->friendLists()->where('email', '=', $invitee)->first(),
-                    ],
-                    403
-                );
+            if ($inviter === $invitee) {
+                return Helper::errorMessage(message: "Friend Request Failed.", error: "Same Email Found In Request");
             }
 
-
-            /// What Is We Are Inviting Is Not In Our Record 
-            if (is_null($inviteeRecord) || !$inviteeRecord->exists()) {
-                return response()->json(
-                    [
-                        'status' => false,
-                        'data' => [],
-                        'message' => "Friend request failed. Try again later.",
-                        'error' => "Your friend isn't here(Pillu). Invite them to join for a chat!",
-                    ],
-                    403
-                );
+            if (!Helper::isObjectExist($inviter_record)) {
+                return Helper::errorMessage(message: "Friend Request Failed", error: "Inviter Is Not Exists");
             }
 
-            if ($inviteeRecord->friendLists()->where('email', '=', $inviter)->exists()) {
-                // Add in friend list of inviter if not exist
-                return response()->json(
-                    [
-                        'error' => [],
-                        'status' => false,
-                        'message' => "Friend request failed.\n Your Already Friend",
-                        'data' => $inviteeRecord->friendLists()->where('email', '=', $inviter)->get(),
-
-
-                    ],
-                    403
-                );
+            if (!Helper::isObjectExist($invitee_record)) {
+                return Helper::errorMessage(message: "Friend Request Failed.", error: "Invitee Is Not Exists");
             }
 
-            if ($inviterRecord->requestList()->where('requested_email', $invitee)->exists()) {
-                return response()->json([
-                    'status' => true,
-                    'data' => [],
-                    'message' => "The Invitation is Already Sended.",
-                    'error' => "",
-                ], 200);
-            };
+            $invitee_exists_in_inviters_invitation_list = $inviter_record->userInvitations()->where('invitation_email', $invitee)->exists();
+            $invitee_exists_in_inviters_request_list = $inviter_record->userRequests()->where('requested_email', $invitee)->exists();
+            $invitee_exists_in_inviters_freind_list = $inviter_record->userFreinds()->where('email', $invitee)->exists();
+            $inviter_exists_in_invitee_invitation_list = $invitee_record->userInvitations()->where('invitation_email', $inviter)->exists();
+            $inviter_exists_in_invitee_request_list = $invitee_record->userRequests()->where('requested_email', $inviter)->exists();
+            $inviter_exists_in_invitee_user_list = $invitee_record->userFreinds()->where('email', $inviter)->exists();
 
-            $requestedUser = RequestList::create([
-                'user_id' => $inviterRecord->id,
-                'requested_email' =>  $invitee,
-            ]);
+            $request_is_already_sended =
+                $invitee_exists_in_inviters_invitation_list
+                || $invitee_exists_in_inviters_request_list
+                || $invitee_exists_in_inviters_freind_list
+                || $inviter_exists_in_invitee_invitation_list
+                || $inviter_exists_in_invitee_request_list
+                || $inviter_exists_in_invitee_user_list;
 
-            $inviterUser = InvitationList::create([
-                'user_id' => $inviteeRecord->id,
-                'invitation_email' => $inviter,
-            ]);
+            if ($request_is_already_sended) {
+                return Helper::errorMessage(message: "Friend Request Failed.", error: "You May Already Freind Or You Sended Request Earlier Please Check It Again");
+            }
 
-            // For Inviter It Will Be Request Becouse He/She Is Requesting 
-            $inviterRecord->requestList()->save($requestedUser);
+            $requested_user_req = ['user_id' => $inviter_record->id, 'requested_email' =>  $invitee];
+            $inviter_user_req = ['user_id' => $invitee_record->id, 'invitation_email' => $inviter];
 
-            /// For Invitee Add In Ivitation List
-            $inviteeRecord->invitationLists()->save($inviterUser);
+            $requested_user = RequestList::create($requested_user_req);
+            $inviter_user = InvitationList::create($inviter_user_req);
 
-            return response()->json(
-                [
-                    'status' => true,
-                    'error' => 'N/A',
-                    'message' => 'successful',
-                    'current_user' => $inviterRecord,
-                    'current_user_requested_list' => $requestedUser,
-                    'other_user' => $inviteeRecord,
-                    'other_user_invitation_list' => $inviterUser,
+            $inviter_record->userRequests()->save($requested_user);
+            $invitee_record->userInvitations()->save($inviter_user);
+
+            return Helper::successMessage(
+                message: "Successful",
+                data: [
+                    'inviter_user' => $inviter_record->email,
+                    'invitee_user' => $invitee_record->email,
                 ],
-                200
             );
         } catch (Throwable $e) {
             report($e);
-
             $this->logMessage($e);
-
-            return response()->json(
-                [
-                    'status' => false,
-                    'data' => [],
-                    'message' => "Friend request failed.\nTry again later.",
-                    'error' => $e->getMessage(),
-                ],
-                500
-            );
+            return Helper::errorMessage(message: $e->getMessage(), error: $e);
         }
     }
 
@@ -458,72 +308,85 @@ class FireAuthUserController extends Controller
     {
 
         try {
-            // Current User 
-            $accepterEmail = $req->input('accepter_email');
-            // Other User
-            $inviterEmail = $req->input('inviter_email');
+            $accepter_email = $req->input('accepter_email');
+            $inviter_email = $req->input('inviter_email');
 
-            $accepterUser = User::where('email', '=', $accepterEmail)->first();
-            $inviterUser = User::where('email', '=', $inviterEmail)->first();
-
-            $accepterUser->requestList()->where('requested_email', $inviterEmail)->delete();
-            $accepterUser->invitationLists()->where('invitation_email', $inviterEmail)->delete();
-            $inviterUser->requestList()->where('requested_email', $accepterEmail)->delete();
-            $inviterUser->invitationLists()->where('invitation_email', $accepterEmail)->delete();
-
-            if ($accepterUser->friendLists()->where('email', '=', $inviterEmail)->exists()) {
-                //
-            } else {
-
-                $requestedUser = UserFriendList::create([
-                    'user_id' => $accepterUser->id,
-                    'email' => $inviterEmail,
-                    'is_accepted' =>  false,
-                    'is_blocked' => false,
-                ]);
-
-                $accepterUser->friendLists()->save($requestedUser);
+            if ($accepter_email === $inviter_email) {
+                return Helper::errorMessage(message: "Accept Friend Request Failed.", error: "Same Email Found In Request");
             }
 
+            $accepter_user = User::where('email', '=', $accepter_email)->first();
+            $inviter_user = User::where('email', '=', $inviter_email)->first();
 
-            if ($inviterUser->friendLists()->where('email', '=', $accepterEmail)->exists()) {
-                //
-            } else {
-                $requestedUser = UserFriendList::create([
-                    'user_id' => $inviterUser->id,
-                    'email' => $accepterEmail,
-                    'is_accepted' =>  false,
-                    'is_blocked' => false,
-                ]);
-
-                $inviterUser->friendLists()->save($requestedUser);
+            if (!Helper::isObjectExist($accepter_user)) {
+                return Helper::errorMessage(message: "Request Failed", error: "Accepter Is Not Exists");
             }
 
-            return response()->json(
-                [
-                    'error' => [],
-                    'status' => false,
-                    'accepter_email' => $accepterUser->email,
-                    'inviter_email' => $inviterUser->email,
-                    'accepter_friend_data' => $accepterUser->friendLists()->where('email', $inviterUser->email)->first(),
-                    'inviter_friend_data' => $inviterUser->friendLists()->where('email', $accepterUser->email)->first(),
+            if (!Helper::isObjectExist($inviter_user)) {
+                return Helper::errorMessage(message: "Friend Request Failed.", error: "Inviter Is Not Exists");
+            }
 
+            $is_user_exists_to_accept = $accepter_user->userInvitations()->where('invitation_email', $inviter_email)->exists();
+            $is_user_sended_freind_request = $inviter_user->userRequests()->where('requested_email', $accepter_email)->exists();
+
+            if (!$is_user_exists_to_accept) {
+                return Helper::errorMessage(message: "Accept Request Failed.", error: "Not Found In Invitation List");
+            }
+
+            if (!$is_user_sended_freind_request) {
+                return Helper::errorMessage(message: "Accept Request Failed.", error: "User Not Sended Freind Request");
+            }
+
+            $accepter_user->userRequests()->where('requested_email', $inviter_email)->delete();
+            $accepter_user->userInvitations()->where('invitation_email', $inviter_email)->delete();
+
+            $inviter_user->userRequests()->where('requested_email', $accepter_email)->delete();
+            $inviter_user->userInvitations()->where('invitation_email', $accepter_email)->delete();
+
+            $is_valid_to_accept = !($accepter_user->userFreinds()->where('email', $inviter_email)->exists());
+
+            if ($is_valid_to_accept) {
+
+                $requested_user = [
+                    'user_id' => $accepter_user->id,
+                    'email' => $inviter_email,
+                    'is_accepted' =>  false,
+                    'is_blocked' => false,
+                ];
+
+                $requested_user = UserFriendList::create($requested_user);
+                $accepter_user->userFreinds()->save($requested_user);
+            }
+
+            $is_user_willing_to_accept = !($inviter_user->userFreinds()->where('email', '=', $accepter_email)->exists());
+
+            if ($is_user_willing_to_accept) {
+                $user_freind_req = [
+                    'user_id' => $inviter_user->id,
+                    'email' => $accepter_email,
+                    'is_accepted' =>  false,
+                    'is_blocked' => false,
+                ];
+
+                $requested_user = UserFriendList::create($user_freind_req);
+                $inviter_user->userFreinds()->save($requested_user);
+            }
+
+            return Helper::successMessage(
+                message: "Successful",
+                data: [
+                    'accepter_email' => $accepter_user->email,
+                    'inviter_email' => $inviter_user->email,
                 ],
-                200,
             );
         } catch (Throwable $e) {
             report($e);
 
             $this->logMessage($e);
 
-            return response()->json(
-                [
-                    'status' => false,
-                    'data' => [],
-                    'message' => "Make Sure Email Is Correct",
-                    'error' => $e->getMessage(),
-                ],
-                500,
+            return Helper::errorMessage(
+                message: $e->getMessage(),
+                error: $e,
             );
         }
     }
@@ -535,115 +398,25 @@ class FireAuthUserController extends Controller
             $record = User::where('email', '=', $req->input('email'))->first();
 
             if (!is_null($record) && $record->exists()) {
-                return response()->json(
-                    [
-                        'status' => true,
-                        'error' => 'N/A',
-                        'message' => 'successful',
-                        'data' =>  new InvitationListResource($record),
-                    ],
-                    200
-                );
+                return Helper::successMessage(message: 'Successful', data: new InvitationListResource($record));
             } else {
-                return response()->json(
-                    [
-                        'status' => true,
-                        'error' => 'N/A',
-                        'message' => 'No record Found',
-                        'data' =>  [],
-                    ],
-                    200
-                );
+                return Helper::successMessage(message: 'No record Found', data: 'N/A');
             }
         } catch (Throwable $e) {
             report($e);
-
             $this->logMessage($e);
-
-            return response()->json(
-                [
-                    'status' => false,
-                    'data' => [],
-                    'message' => "Make Sure Email Is Correct",
-                    'error' => $e->getMessage(),
-                ],
-                500,
-            );
+            return Helper::errorMessage(message: $e->getMessage(), error: $e);
         }
     }
 
     public function cancelInvite(Request $req)
     {
         try {
-            // Current User 
-            $inviter = $req->input('inviter_email');
-            // Other User
-            $invitee = $req->input('invitee_email');
-
-
-            $inviterRecord = User::where('email', $inviter)->first();
-
-            /// What If Inviter Is Not Exist In Pillu's Record 
-            if (is_null($inviterRecord) || !$inviterRecord->exists()) {
-                return response()->json(
-                    [
-                        'status' => false,
-                        'data' => [],
-                        'message' => [],
-                        'error' => "Please register first to cancel the invitation.",
-                    ],
-                    403
-                );
-            }
-
-            $inviteeRecord = User::where('email', $invitee)->first();
-
-            /// What Is We Are Inviting Is Not In Our Record 
-            if (is_null($inviteeRecord) || !$inviteeRecord->exists()) {
-                return response()->json(
-                    [
-                        'status' => false,
-                        'data' => [],
-                        'message' => [],
-                        'error' => "Your friend isn't here(Pillu). Invite them to join for a chat!",
-                    ],
-                    403
-                );
-            }
-
-
-            // For Inviter It Will Be Request Becouse He/She Is Requesting 
-            $inviterRecord->requestList()->where('requested_email', $invitee)->delete();
-
-            /// For Invitee Add In Ivitation List
-            $inviteeRecord->invitationLists()->where('invitation_email', $inviter)->delete();
-
-            return response()->json(
-                [
-                    'status' => true,
-                    'error' => 'N/A',
-                    'message' => 'successful',
-                    'inviter_user' => $inviterRecord,
-                    'invitee_user' => $inviteeRecord,
-                    'requested_list' => $inviterRecord->requestList(),
-                    'invitation_list' => $inviteeRecord->invitationLists(),
-                ],
-                200
-            );
+            return Helper::successMessage(message: 'Pending..', data: 'N/A');
         } catch (Throwable $e) {
             report($e);
-
             $this->logMessage($e);
-
-            return response()->json(
-                [
-                    'status' => false,
-                    'data' => [],
-                    'message' => "Make Sure Email Is Correct",
-                    'error' => $e->getMessage(),
-                ],
-                500
-            );
+            return Helper::errorMessage(message: $e->getMessage(), error: $e);
         }
     }
 
@@ -653,40 +426,14 @@ class FireAuthUserController extends Controller
             $record = User::where('email', '=', $req->input('email'))->first();
 
             if (!is_null($record) && $record->exists()) {
-                return response()->json(
-                    [
-                        'status' => true,
-                        'error' => 'N/A',
-                        'message' => 'successful',
-                        'data' =>  new RequestListResource($record),
-                    ],
-                    200
-                );
+                return Helper::successMessage(message: 'Successful', data: new RequestListResource($record));
             } else {
-                return response()->json(
-                    [
-                        'status' => false,
-                        'error' => 'N/A',
-                        'message' => 'no record found',
-                        'data' => [],
-                    ],
-                    200
-                );
+                return Helper::successMessage(message: 'Successful', data: 'No Record Found');
             }
         } catch (Throwable $e) {
             report($e);
-
             $this->logMessage($e);
-
-            return response()->json(
-                [
-                    'status' => false,
-                    'data' => [],
-                    'message' => "Make Sure Email Is Correct",
-                    'error' => $e->getMessage(),
-                ],
-                500
-            );
+            return Helper::errorMessage(message: $e->getMessage(), error: $e);
         }
     }
 }

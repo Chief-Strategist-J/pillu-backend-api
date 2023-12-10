@@ -62,17 +62,17 @@ class User extends Authenticatable
         return $this->hasOne(OneSignalUserProfile::class);
     }
 
-    public function friendLists()
+    public function userFreinds()
     {
         return $this->hasMany(UserFriendList::class);
     }
 
-    public function invitationLists()
+    public function userInvitations()
     {
         return $this->hasMany(InvitationList::class);
     }
 
-    public function requestList()
+    public function userRequests()
     {
         return $this->hasMany(RequestList::class);
     }
