@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Auth\Events\Registered;
-use App\Mail\TestEmail;
+// use App\Mail\TestEmail;
 use App\Models\FireAuthUser;
 use App\Models\OneSignalUserProfile;
 use App\Models\User;
@@ -17,7 +17,7 @@ use App\Http\Resources\InvitationListResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
+// use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use App\Helper\Helper;
 use Throwable;
